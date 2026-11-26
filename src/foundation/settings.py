@@ -16,7 +16,10 @@ SECURE_CSP["img-src"].append("https://tiles.example.com"). Environment variables
     CAPTCHA_ENABLED   "false" skips captcha checks (the widget still runs)
     NUM_PROXIES       proxies in front of Django that append to X-Forwarded-For (default 0)
     HTTPS             "true" once served over https: secure cookies and HSTS
-    THROTTLE_ANON, THROTTLE_USER, THROTTLE_AUTH, THROTTLE_CAPTCHA   rates such as "10/min"
+    THROTTLE_ANON, THROTTLE_USER, THROTTLE_AUTH, THROTTLE_CAPTCHA, THROTTLE_MFA   rates such
+                      as "10/min"
+    MFA_ENCRYPTION_KEY   Fernet key(s) for 2FA secrets, comma-separated; the first encrypts
+    WEBAUTHN_RP_ID    the domain security keys are made for (default: the request's host)
     BACKUP_ROOT, PG_DUMP, PG_RESTORE, AWS_S3_BACKUP_BUCKET, AWS_S3_BACKUP_PREFIX,
     AWS_S3_REGION, AWS_S3_ENDPOINT_URL, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
 """
@@ -33,6 +36,11 @@ SECURITY_MIDDLEWARE = [
     # the files it serves get these headers too.
     "django.middleware.csp.ContentSecurityPolicyMiddleware",
     "foundation.security.middleware.PermissionsPolicyMiddleware",
+]
+
+MFA_MIDDLEWARE = [
+    # allauth.account refuses to start without it. After AuthenticationMiddleware.
+    "allauth.account.middleware.AccountMiddleware",
 ]
 
 BACKUPS_MIDDLEWARE = [
@@ -137,6 +145,8 @@ def rest_framework(env, *, debug: bool = False, rates: dict | None = None) -> di
             "user": env("THROTTLE_USER", default="1200/min"),
             "auth": env("THROTTLE_AUTH", default="10/min"),
             "captcha": env("THROTTLE_CAPTCHA", default="30/min"),
+            # Per account: 2FA changes that check the password (foundation.mfa).
+            "mfa": env("THROTTLE_MFA", default="10/min"),
             **(rates or {}),
         },
         # How many proxies in front of Django append to X-Forwarded-For. 0 trusts only the
@@ -148,6 +158,44 @@ def rest_framework(env, *, debug: bool = False, rates: dict | None = None) -> di
         # No browsable API in production: JSON only.
         values["DEFAULT_RENDERER_CLASSES"] = ["rest_framework.renderers.JSONRenderer"]
     return values
+
+
+def mfa(env, *, issuer: str) -> dict:
+    """Two-factor sign-in settings (foundation.mfa, on allauth.mfa). `issuer` is the name people
+    see in their authenticator app and when their browser asks for a security key."""
+    keys = [k.strip() for k in env("MFA_ENCRYPTION_KEY", default="").split(",") if k.strip()]
+    if not keys:
+        raise ImproperlyConfigured(
+            "Set MFA_ENCRYPTION_KEY: python -c 'from cryptography.fernet import Fernet; "
+            "print(Fernet.generate_key().decode())'"
+        )
+    from cryptography.fernet import Fernet
+
+    for key in keys:
+        try:
+            Fernet(key)
+        except ValueError as error:
+            raise ImproperlyConfigured("MFA_ENCRYPTION_KEY isn't a Fernet key.") from error
+    return {
+        # TOTP keys and recovery-code seeds are encrypted with these (foundation.mfa.crypto).
+        # Put a new key first to rotate; keep the old ones after it until nothing uses them.
+        "MFA_ENCRYPTION_KEYS": keys,
+        "MFA_ADAPTER": "foundation.mfa.adapter.MFAAdapter",
+        "MFA_SUPPORTED_TYPES": ["totp", "recovery_codes", "webauthn"],
+        "MFA_TOTP_ISSUER": issuer,
+        # One 30-second step either side, for phones whose clocks drift. allauth still refuses
+        # a code used once until it can no longer be valid.
+        "MFA_TOTP_TOLERANCE": 1,
+        "MFA_WEBAUTHN_RP_ID": env("WEBAUTHN_RP_ID", default=""),
+        # Seconds a setup (the app's secret, a key's challenge) waits to be confirmed.
+        "MFA_SETUP_TIMEOUT": 10 * 60,
+        # Seconds the second step of signing in waits for a code or key, after the password.
+        "MFA_LOGIN_TIMEOUT": 5 * 60,
+        # Wrong codes or keys at sign-in before that account's second step locks, and for how
+        # many seconds.
+        "MFA_MAX_FAILURES": 5,
+        "MFA_LOCKOUT_SECONDS": 15 * 60,
+    }
 
 
 def backups(env, *, media_root, name: str) -> dict:

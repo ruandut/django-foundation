@@ -1,13 +1,14 @@
 # django-foundation
 
 Reusable Django apps for the parts every internet-facing project needs: protection for its
-sign-in routes, security headers, background jobs and database backups. Install it once and
+sign-in routes, security headers, two-factor sign-in, background jobs and database backups. Install it once and
 every project built on it shares the same fixes. For Django 6.1, DRF, SimpleJWT, Hatchet and
 Postgres, with no Redis.
 
 | App | What it gives you |
 |---|---|
 | `foundation.security` | An [ALTCHA](https://altcha.org) proof-of-work captcha on sign-in routes and the Django admin's login; rate limits per account and per IP; a Content Security Policy, Permissions-Policy and the other security headers; a Postgres cache table for all of it |
+| `foundation.mfa` | Two-factor sign-in on [allauth.mfa](https://docs.allauth.org/en/latest/mfa/): each person adds an authenticator app, security keys or passkeys, and gets recovery codes; signing in (the API and the Django admin) then asks for one. Secrets encrypted at rest |
 | `foundation.jobs` | One Hatchet client per process, task discovery (`TASKS = [...]` in each app's `tasks.py`) and `manage.py hatchet_worker` |
 | `foundation.backups` | Scheduled `pg_dump` backups run by Hatchet, kept in a folder or Amazon S3 with retention; rolling the database back to one from Django admin, with the app in maintenance mode meanwhile |
 
@@ -37,6 +38,10 @@ INSTALLED_APPS = [
     "foundation.jobs",
     "foundation.security",
     "foundation.backups",   # optional
+    "allauth",              # these four for two-factor sign-in (optional)
+    "allauth.account",
+    "allauth.mfa",
+    "foundation.mfa",
     ...,
 ]
 
@@ -44,6 +49,9 @@ MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     *foundation.SECURITY_MIDDLEWARE,   # above WhiteNoise
     *foundation.BACKUPS_MIDDLEWARE,    # if you use backups
+    ...,
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    *foundation.MFA_MIDDLEWARE,        # if you use two-factor sign-in
     ...,
 ]
 
@@ -56,6 +64,7 @@ REST_FRAMEWORK = {
 # make ALTCHA_HMAC_KEY required.
 globals().update(foundation.security(env, secret_key=SECRET_KEY))
 globals().update(foundation.backups(env, media_root=MEDIA_ROOT, name="my-app"))
+globals().update(foundation.mfa(env, issuer="My App"))  # shown in authenticator apps
 HATCHET_WORKER_NAME = "my-app-worker"
 ```
 
@@ -74,7 +83,8 @@ protect_admin_login()  # the captcha on the Django admin's login
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/auth/", include("foundation.security.urls")),  # GET captcha/
-    path("api/auth/token/", LoginView.as_view()),  # SimpleJWT behind the captcha
+    path("api/auth/token/", LoginView.as_view()),  # SimpleJWT behind the captcha (and 2FA)
+    path("api/auth/mfa/", include("foundation.mfa.urls")),  # two-factor sign-in
     ...,
 ]
 ```
@@ -90,6 +100,42 @@ The SPA renders the `altcha` widget (npm `altcha` v3) pointed at `/api/auth/capt
 payload as `altcha` with the form, then fetches a new challenge after each attempt: each one
 works once. With backups, a 503 `{"code": "maintenance"}` from the API means a rollback is
 running: show a maintenance page, keep the session, and reload once `/api/health/` answers.
+
+### Two-factor sign-in
+
+`MFA_ENCRYPTION_KEY` is required: a Fernet key, made with
+`python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'`.
+To rotate, put a new key first, comma-separated, and keep the old one after it. Security keys
+are made for one domain: set `WEBAUTHN_RP_ID` to the site's (e.g. `app.example.com`) when
+Django sees another host behind a proxy.
+
+Under `api/auth/mfa/`, for the signed-in person (changes other than renaming take `password`,
+and are limited per account at `THROTTLE_MFA`):
+
+| Route | Does |
+|---|---|
+| `GET ""` | `{enabled, totp, keys: [{id, name, created_at, last_used_at}], recovery_codes: {left, total}}` |
+| `POST totp/setup/` | `{secret, url, svg}`: show the QR code (`svg`), or the secret to type in |
+| `POST totp/` `{code, password}` | turns the app on; 201 `{recovery_codes}` (a list with the first factor, else null) |
+| `DELETE totp/` `{password}` | removes it |
+| `POST keys/options/` | `{publicKey}` for `navigator.credentials.create` |
+| `POST keys/` `{name, credential, password}` | adds the key; 201 `{id, name, recovery_codes}` |
+| `PATCH`/`DELETE keys/<id>/` | `{name}` renames; `{password}` removes |
+| `POST recovery-codes/` `{password}` | 10 new codes, replacing the old ones |
+
+Recovery codes are only ever in the response that made them: show them then, once. Removing the
+last app or key turns 2FA off and removes the codes.
+
+Signing in: for someone with 2FA, `POST /api/auth/token/` answers
+`{"mfa_required": true, "mfa_token": "…", "methods": ["totp", "webauthn", "recovery_codes"]}`
+instead of tokens. Ask for a code (app or recovery), or for a key via
+`POST api/auth/mfa/login/key-options/ {mfa_token}` and `navigator.credentials.get`; then
+`POST api/auth/mfa/login/` with `{mfa_token, code}` or `{mfa_token, credential}` for
+`{access, refresh}`. The token lasts 5 minutes and works once; 5 wrong tries lock that
+account's second step for 15 minutes (403 `{"code": "locked"}`; `"expired"` means start again
+with the password). The Django admin's login gets an "Authentication code" field for app or
+recovery codes. A superuser turns off someone's 2FA by deleting their rows under MFA →
+Authenticators in admin.
 
 ### Backups in production
 

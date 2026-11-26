@@ -17,6 +17,7 @@ from urllib.parse import parse_qs
 
 import altcha
 from django import forms
+from django.apps import apps
 from django.conf import settings
 from django.contrib.admin.forms import AdminAuthenticationForm
 from django.forms import ValidationError as DjangoValidationError
@@ -96,9 +97,18 @@ class AdminLoginForm(AdminAuthenticationForm):
     """The Django admin's login, with the same captcha. django-altcha renders its own widget."""
 
     altcha = forms.CharField(required=False)
+    # Only checked for people with 2FA (foundation.mfa); others leave it empty.
+    code = forms.CharField(
+        required=False,
+        label="Authentication code",
+        help_text="From your authenticator app, or a recovery code. Empty if you don't use 2FA.",
+        widget=forms.TextInput(attrs={"autocomplete": "one-time-code", "inputmode": "numeric"}),
+    )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        if not apps.is_installed("foundation.mfa"):
+            del self.fields["code"]
         # django-altcha's bundled widget (v2) calls the minimum time `delay`, in milliseconds.
         # Built here, not on the class, so it follows the settings in force.
         self.fields["altcha"].widget = AltchaField(
@@ -114,4 +124,14 @@ class AdminLoginForm(AdminAuthenticationForm):
             check(self.data.get("altcha"))
         except DjangoValidationError as e:
             raise forms.ValidationError(e.messages, code=e.code) from e
-        return super().clean()
+        cleaned = super().clean()
+        # After the password, so the code is only asked of someone who knew it.
+        if apps.is_installed("foundation.mfa"):
+            from foundation.mfa import services
+
+            if services.is_enabled(self.user_cache):
+                try:
+                    services.check_code(self.user_cache, cleaned.get("code", ""))
+                except services.Refused as e:
+                    raise forms.ValidationError(e.message, code=e.code) from e
+        return cleaned

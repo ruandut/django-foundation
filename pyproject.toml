@@ -1,12 +1,13 @@
 [project]
 name = "django-foundation"
 version = "0.1.0"
-description = "Shared Django plumbing: captcha, rate limits and security headers; Hatchet jobs; database backups and rollbacks"
+description = "Shared Django plumbing: captcha, rate limits and security headers; two-factor sign-in; Hatchet jobs; database backups and rollbacks"
 authors = [{ name = "Ruan" }]
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
     "django>=6.1,<6.2",
+    "django-allauth[mfa]>=65.23,<66",
     "django-altcha>=1.0.0",
     "django-environ>=0.14.0",
     "djangorestframework>=3.18.3",
