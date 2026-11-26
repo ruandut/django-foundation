@@ -1,0 +1,33 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">{% translate 'Home' %}</a>
+  &rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_config.verbose_name }}</a>
+  &rsaquo; <a href="{% url opts|admin_urlname:'changelist' %}">{{ opts.verbose_name_plural|capfirst }}</a>
+  &rsaquo; Roll back
+</div>
+{% endblock %}
+
+{% block content %}
+<h1>Roll the database back to {{ backup }}?</h1>
+<p>Everything changed since {{ backup.created_at }} is lost: every row in every table, users and
+settings included. Backups, schedules and rollbacks themselves are kept.</p>
+<ul>
+  <li>The app goes down for maintenance while it runs. Everyone, you included, gets the
+    maintenance page until it is done; requests in progress are cut off.</li>
+  <li>A backup of the database as it is now is taken first ("Before a rollback"), so this can
+    be undone by rolling back to that.</li>
+  <li>The restore runs in one transaction: if it fails, nothing changes.</li>
+  <li>Uploaded files are not part of the database: files of uploads made since stay on disk,
+    and files of uploads deleted since are not brought back.</li>
+</ul>
+<form method="post">{% csrf_token %}
+  <input type="hidden" name="action" value="roll_back">
+  <input type="hidden" name="_selected_action" value="{{ backup.pk }}">
+  <input type="hidden" name="confirmed" value="yes">
+  <input type="submit" value="Yes, roll back">
+  <a href="{% url opts|admin_urlname:'changelist' %}" class="button cancel-link">No, take me back</a>
+</form>
+{% endblock %}
