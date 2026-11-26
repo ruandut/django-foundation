@@ -241,7 +241,7 @@ def _have_pg_tools() -> bool:
 @pytest.mark.django_db(transaction=True)
 def test_at_0014_13_rolling_back_restores_the_data_and_keeps_the_backups(backup_root, inline):
     owner = make_user("owner@example.com")
-    realm = Group.objects.create(name="Before")
+    group = Group.objects.create(name="Before")
     schedule = BackupSchedule.objects.create(name="Nightly", cron="", keep=5)
     first = Backup.objects.create(
         schedule=schedule, trigger=Backup.Trigger.MANUAL, status=Status.RUNNING
@@ -249,7 +249,7 @@ def test_at_0014_13_rolling_back_restores_the_data_and_keeps_the_backups(backup_
     assert services._make_dump(first, folder="test")
 
     # Life goes on after the backup.
-    Group.objects.filter(pk=realm.pk).update(name="After")
+    Group.objects.filter(pk=group.pk).update(name="After")
     Group.objects.create(name="Made later")
     owner.delete()
 

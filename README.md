@@ -1,7 +1,8 @@
 # django-foundation
 
-The shared plumbing behind Ruan's Django apps (rent-tracker, eden-tracker), so each new app
-starts with it and a fix here reaches all of them. For Django 6.1, DRF, SimpleJWT, Hatchet and
+Reusable Django apps for the parts every internet-facing project needs: protection for its
+sign-in routes, security headers, background jobs and database backups. Install it once and
+every project built on it shares the same fixes. For Django 6.1, DRF, SimpleJWT, Hatchet and
 Postgres, with no Redis.
 
 | App | What it gives you |
@@ -72,8 +73,8 @@ protect_admin_login()  # the captcha on the Django admin's login
 
 urlpatterns = [
     path("admin/", admin.site.urls),
-    path("api/auth/", include("foundation.security.urls")),     # GET captcha/
-    path("api/auth/token/", LoginView.as_view()),               # SimpleJWT behind the captcha
+    path("api/auth/", include("foundation.security.urls")),  # GET captcha/
+    path("api/auth/token/", LoginView.as_view()),  # SimpleJWT behind the captcha
     ...,
 ]
 ```
@@ -86,9 +87,9 @@ Other views worth protecting take the `CaptchaProtected` mixin
 
 The SPA renders the `altcha` widget (npm `altcha` v3) pointed at `/api/auth/captcha/`, with
 `minDuration` a little above `CAPTCHA_MIN_SECONDS` (3.5 s for the default 3), and sends its
-payload as `altcha` with the form. rent-tracker's `frontend/src/components/altcha.tsx` is a
-ready-made React component. With backups, a 503 `{"code": "maintenance"}` from the API means a
-rollback is running: eden-tracker shows a maintenance page until `/api/health/` answers.
+payload as `altcha` with the form, then fetches a new challenge after each attempt: each one
+works once. With backups, a 503 `{"code": "maintenance"}` from the API means a rollback is
+running: show a maintenance page, keep the session, and reload once `/api/health/` answers.
 
 ### Backups in production
 
@@ -98,8 +99,9 @@ the first schedule, so Hatchet knows the backup task. Only superusers see backup
 
 ## Developing
 
-Tests run against a real Postgres (`DATABASE_URL`, by default rent-tracker's dev server on
-port 5434; pytest creates its own `test_` database there):
+Tests run against a real Postgres server, named by `DATABASE_URL` (by default
+`postgres://postgres:postgres@localhost:5432/foundation`); pytest creates its own `test_`
+database there:
 
 ```bash
 uv sync
@@ -110,5 +112,6 @@ uv run ruff check . && uv run ruff format --check .
 The backup tests that run real `pg_dump`/`pg_restore` skip without them; on a Mac,
 `brew install libpq` and run with `PG_DUMP=/opt/homebrew/opt/libpq/bin/pg_dump`.
 
-`foundation.backups` keeps the app label `backups` and its migration `0001_initial`, so
-eden-tracker's existing tables carry over when it switches to this package.
+`foundation.backups` uses the app label `backups`, not `foundation_backups`. Keep it that
+way: its tables and migrations are named after it, so changing it would orphan existing
+installs' backups.

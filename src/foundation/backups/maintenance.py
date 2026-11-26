@@ -13,7 +13,7 @@ import psycopg
 from django.db import connection
 
 # (classid, objid) of the advisory lock. Arbitrary, fixed; never change it, or a rollback
-# running across an upgrade would go unseen. Spells "eden" / "roll", where it began.
+# running across an upgrade would go unseen.
 LOCK = (0x6564656E, 0x726F6C6C)
 
 IN_PROGRESS = "maintenance"

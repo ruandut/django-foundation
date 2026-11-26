@@ -1,5 +1,5 @@
-"""A minimal project for the package's tests. Needs a Postgres server: DATABASE_URL, by default
-the rent-tracker dev database's server (make up there), where pytest makes its own test_ one."""
+"""A minimal project for the package's tests. Needs a Postgres server, named by DATABASE_URL,
+where pytest makes its own test_ database."""
 
 import environ
 
@@ -11,7 +11,9 @@ SECRET_KEY = "tests-only"
 DEBUG = False
 ALLOWED_HOSTS = ["testserver", "localhost"]
 DATABASES = {
-    "default": env.db("DATABASE_URL", default="postgres://rent:rent@localhost:5434/foundation")
+    "default": env.db(
+        "DATABASE_URL", default="postgres://postgres:postgres@localhost:5432/foundation"
+    )
 }
 
 INSTALLED_APPS = [

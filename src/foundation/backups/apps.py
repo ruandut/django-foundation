@@ -15,7 +15,8 @@ SETTINGS = [
 
 class BackupsConfig(AppConfig):
     name = "foundation.backups"
-    # "backups", not "foundation_backups": eden-tracker's tables and migrations already use it.
+    # "backups", not "foundation_backups", and it must stay so: existing installs' tables and
+    # migrations are named after it.
     label = "backups"
     verbose_name = "Database backups"
 
