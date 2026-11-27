@@ -1,6 +1,6 @@
 [project]
 name = "django-foundation"
-version = "0.1.0"
+version = "0.2.0"
 description = "Shared Django plumbing: captcha, rate limits and security headers; two-factor sign-in; Hatchet jobs; database backups and rollbacks"
 authors = [{ name = "Ruan" }]
 readme = "README.md"

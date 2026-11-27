@@ -15,10 +15,11 @@ Postgres, with no Redis.
 ## Installing
 
 ```bash
-uv add "django-foundation @ https://github.com/ruandut/django-foundation/archive/refs/tags/v0.1.0.tar.gz"
+uv add "django-foundation @ https://github.com/ruandut/django-foundation/archive/refs/tags/v0.2.0.tar.gz"
 ```
 
-A release tarball needs no `git` in the image that builds your app. For S3 backups, add the
+Releases are listed on the repository's Releases page. A release tarball needs no `git` in the
+image that builds your app. For S3 backups, add the
 `s3` extra: `django-foundation[s3] @ …`.
 
 ## Wiring it in
@@ -161,3 +162,23 @@ The backup tests that run real `pg_dump`/`pg_restore` skip without them; on a Ma
 `foundation.backups` uses the app label `backups`, not `foundation_backups`. Keep it that
 way: its tables and migrations are named after it, so changing it would orphan existing
 installs' backups.
+
+## Releasing
+
+Changes reach `main` through pull requests, and CI (`.github/workflows/ci.yml`: ruff and
+pytest against Postgres 18) runs on each pull request and again on `main` after the merge.
+
+To release, merge a pull request that changes `version` in `pyproject.toml` (and runs
+`uv lock`). Once CI passes on `main`, `.github/workflows/release.yml` tags that commit
+`vX.Y.Z` and publishes a GitHub Release with the wheel and sdist, its notes made from the
+pull requests since the last one. A merge that leaves the version alone releases nothing. A
+version such as `0.3.0rc1` is published as a pre-release, for trying a change in one project
+first. Projects then move their `uv add` URL to the new tag.
+
+A new feature, a new dependency or anything a project must change is a new minor version
+(`0.2.0` → `0.3.0`); a fix that needs nothing of projects is a patch (`0.2.1`).
+
+### 0.2.0
+
+Adds two-factor sign-in (`foundation.mfa`). `django-allauth[mfa]` is now a dependency of every
+install; nothing changes for a project that doesn't add the 2FA apps, settings and URLs above.

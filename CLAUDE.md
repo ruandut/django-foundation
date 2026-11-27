@@ -84,6 +84,13 @@ If a spec conflicts with the architecture table or the rules above, stop and rai
 - Say plainly what wasn't tested (no real browser for WebAuthn, no real AWS, no real Hatchet
   server), and don't report an inferred cause as fact.
 
-## Git
+## Git and releases
 
-- Commit only when asked. Never push, tag or cut a release unless asked.
+- Work on a branch off `main` and land it through a pull request; CI (`ci.yml`) must pass on
+  it. Never commit to `main` directly.
+- Commit only when asked. Never push unless asked.
+- Releasing is bumping `version` in `pyproject.toml` (and `uv lock`) in a pull request:
+  `release.yml` tags and publishes it once CI passes on `main`. Bump only when Ruan asks, never
+  tag by hand, and never move or delete a published tag: projects pin them.
+- A new feature, new dependency or anything a project must change is a minor version; a fix
+  that asks nothing of projects is a patch. Say what projects must change in the README.
