@@ -13,6 +13,7 @@ urlpatterns = [
     path("api/auth/", include("foundation.security.urls")),
     path("api/auth/token/", LoginView.as_view()),
     path("api/auth/token/refresh/", TokenRefreshView.as_view()),
+    path("api/auth/mfa/", include("foundation.mfa.urls")),
     path("api/health/", health),
     path("api/units/", include("tests.private_urls")),
 ]

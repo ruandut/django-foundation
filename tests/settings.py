@@ -1,6 +1,8 @@
 """A minimal project for the package's tests. Needs a Postgres server, named by DATABASE_URL,
 where pytest makes its own test_ database."""
 
+import os
+
 import environ
 
 from foundation import settings as foundation
@@ -28,6 +30,10 @@ INSTALLED_APPS = [
     "foundation.jobs",
     "foundation.security",
     "foundation.backups",
+    "allauth",
+    "allauth.account",
+    "allauth.mfa",
+    "foundation.mfa",
 ]
 
 MIDDLEWARE = [
@@ -38,6 +44,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    *foundation.MFA_MIDDLEWARE,
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -71,3 +78,6 @@ REST_FRAMEWORK = {
 
 globals().update(foundation.security(env, secret_key=SECRET_KEY))
 globals().update(foundation.backups(env, media_root=MEDIA_ROOT, name="tests"))
+# A fixed, invented Fernet key: tests only.
+os.environ.setdefault("MFA_ENCRYPTION_KEY", "dGVzdHMtb25seS10ZXN0cy1vbmx5LXRlc3RzLW9ubHk=")
+globals().update(foundation.mfa(env, issuer="Tests"))

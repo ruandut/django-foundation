@@ -1,7 +1,8 @@
 {% extends "admin/login.html" %}
 {% load i18n %}
 {% comment %}
-  Django's admin login with the captcha row added (foundation/security/captcha.py). Only the form
+  Django's admin login with the captcha row, and the 2FA code row,
+  added (foundation/security/captcha.py). Only the form
   differs from admin/login.html's content block.
 {% endcomment %}
 
@@ -41,6 +42,13 @@
     {{ form.password.label_tag }} {{ form.password }}
     <input type="hidden" name="next" value="{{ next }}">
   </div>
+  {% if form.code %}
+  <div class="form-row">
+    {{ form.code.errors }}
+    {{ form.code.label_tag }} {{ form.code }}
+    <div class="help">{{ form.code.help_text }}</div>
+  </div>
+  {% endif %}
   <div class="form-row">
     {{ form.altcha }}
   </div>
