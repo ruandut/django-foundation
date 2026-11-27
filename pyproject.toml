@@ -25,8 +25,10 @@ dev = [
     "moto[s3]>=5.2.5",
     "pytest>=9.1.1",
     "pytest-django>=4.14.0",
-    "ruff>=0.17.2",
+    { include-group = "lint" },
 ]
+# Just ruff, so CI's lint job installs nothing else.
+lint = ["ruff>=0.17.2"]
 
 [build-system]
 requires = ["hatchling"]
