@@ -84,13 +84,33 @@ If a spec conflicts with the architecture table or the rules above, stop and rai
 - Say plainly what wasn't tested (no real browser for WebAuthn, no real AWS, no real Hatchet
   server), and don't report an inferred cause as fact.
 
-## Git and releases
+## Git, CI and releases
 
-- Work on a branch off `main` and land it through a pull request; CI (`ci.yml`) must pass on
-  it. Never commit to `main` directly.
-- Commit only when asked. Never push unless asked.
-- Releasing is bumping `version` in `pyproject.toml` (and `uv lock`) in a pull request:
-  `release.yml` tags and publishes it once CI passes on `main`. Bump only when Ruan asks, never
-  tag by hand, and never move or delete a published tag: projects pin them.
+The flow: branch off `main` → pull request → CI on the PR → merge → CI on `main` → if the
+version changed, a release. `main` is always green and always releasable.
+
+- **CI** (`.github/workflows/ci.yml`) runs on every pull request and on every push to `main`,
+  as two jobs side by side: `lint` (`ruff check`, `ruff format --check`; installs only the
+  `lint` dependency group) and `test` (pytest against a Postgres 18 service, with the Postgres
+  18 client for `pg_dump`). A newer push to the same ref cancels the older run.
+- **Release** (`.github/workflows/release.yml`) runs when CI finishes on a push to `main`, and
+  only if it passed. If `pyproject.toml`'s version has no `v<version>` tag yet, it builds the
+  wheel and sdist, tags that commit and publishes a GitHub Release with notes from the merged
+  PRs. Otherwise it does nothing, so most merges release nothing. `a`/`b`/`rc`/`.dev` versions
+  are published as pre-releases.
+- **Rulesets on GitHub** (not in the repo; Settings → Rules): "Protect main" requires a pull
+  request, the `lint` and `test` checks, and the branch up to date with `main`; it blocks force
+  pushes and deletion, with no bypass, admins included. No approvals are required (Ruan works
+  alone and GitHub won't let you approve your own PR). "Protect release tags" stops `v*` tags
+  from being moved or deleted; creating them stays open for `release.yml`.
+- The job names `lint` and `test` are the required checks. Renaming or adding a required job
+  means changing the "Protect main" ruleset in the same change, or every PR waits forever.
+- Work on a branch off `main` and land it through a pull request. Pushing to `main` is refused.
+  If `main` moves while a PR is open, the PR needs updating ("Update branch") and CI again.
+- Commit only when asked. Never push unless asked. Never merge a PR or turn on auto-merge
+  unless Ruan asks.
+- Releasing is bumping `version` in `pyproject.toml` (and `uv lock`) in a pull request.
+  Bump only when Ruan asks, never tag by hand, and never move or delete a published tag:
+  projects pin them.
 - A new feature, new dependency or anything a project must change is a minor version; a fix
   that asks nothing of projects is a patch. Say what projects must change in the README.
